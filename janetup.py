@@ -1,3 +1,4 @@
+import argparse
 import glob
 import json
 import os
@@ -24,6 +25,14 @@ Created new Janet environment at {venv_path}:
 #(CMD)        run `{venv_path}\bin\activate` to enter the new environment, then `deactivate` to exit.
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog='janetup',
+        description='Install a custom Janet build, in an isolated environment.')
+    parser.add_argument('dirname', help="Directory for new Janet build")
+    args = parser.parse_args()
+    return args
+
 def get_from_github(name:str, owner:str,
                     temp_dir:str,
                     release:str = None,
@@ -35,6 +44,7 @@ def get_from_github(name:str, owner:str,
     file_name = None
     base_url = f"https://github.com/{owner}/{name}/archive"
     url = None
+    message = None
     if branch is None and tag is None and commit is None:  # we are trying to get a release
         # get list of releases
         try:
@@ -58,16 +68,22 @@ def get_from_github(name:str, owner:str,
             os.remove("releases.json")
         file_name = f"{tag}.tar.gz"
         url = f"{base_url}/refs/tags/{file_name}"
+        message = f"{name} - release:{tag}"
 
     elif branch is not None:
         file_name = f"{branch}.tar.gz"
         url = f"{base_url}/refs/heads/{file_name}"
+        message = f"{name} - branch:{branch}"
     elif tag is not None:
         file_name = f"{tag}.tar.gz"
         url = f"{base_url}/refs/tags/{file_name}"
+        message = f"{name} - tag:{tag}"
     elif commit is not None:
         file_name = f"{commit}.tar.gz"
         url = f"{base_url}/{file_name}"
+        message = f"{name} - commit:{tag}"
+
+    print(f"Downloading {message}")
 
     try:
         path, msg = urllib.request.urlretrieve(url, file_name)
@@ -83,7 +99,6 @@ def get_from_github(name:str, owner:str,
 
     os.chdir(outdir)
     files = glob.glob(f"{name}*")
-    print(files)
     if len(files) == 0:
         print(f"Could not find {name} @ {url}.")
         return None
@@ -93,67 +108,11 @@ def get_from_github(name:str, owner:str,
     os.chdir(curdir)
     return outdir
 
-################################################################
-#
-#
-def download_janet(tempdir, release="latest"):
-    curdir = os.getcwd()
-    os.chdir(tempdir)
-
-    url = None
-    fname = None
-    if release == "master":
-        url = "https://github.com/janet-lang/janet/archive/refs/heads/master.tar.gz"
-        tag = "master"
-        fname = f"janet_{tag}.tar.gz"
-    elif release == "latest":
-        try:
-            urllib.request.urlretrieve("https://api.github.com/repos/janet-lang/janet/releases/latest", "release.json")
-        except urllib.request.HTTPError:
-            print("Could not download the latest Janet release info.")
-            return False
-
-        tag = None
-        if os.path.isfile("release.json"):
-            with open("release.json") as f:
-                data = json.load(f)
-                tag = data["tag_name"]
-            os.remove("release.json")
-
-        if tag is None:
-            print("No latest tag found")
-            return False
-        fname = f"{tag}.tar.gz"
-        url = f"https://github.com/janet-lang/janet/archive/refs/tags/{fname}"
-    else:
-        tag = release
-        fname = f"{tag}.tar.gz"
-        url = f"https://github.com/janet-lang/janet/archive/refs/tags/{fname}"
-
-    if url is None:
-        print(f"Could not find Janet info: {tag}")
-        return False
-
-    try:
-        path, msg = urllib.request.urlretrieve(url, fname)
-    except urllib.request.HTTPError:
-        print("Could not download the latest Janet release.")
-        return False
-
-    tar = tarfile.open(fname)
-    tar.extractall(filter='data')
-    tar.close()
-
-    os.remove(fname)
-    os.chdir(curdir)
-
-    return True
-
 
 def build_janet(tempdir, dirname):
     curdir = os.getcwd()
     os.chdir(tempdir)
-    print(f"Building Janet in {tempdir}, PREFIX={dirname}")
+    print(f"Building Janet, PREFIX={dirname}")
 
     env = dict(os.environ, PREFIX=dirname)
     for item in ["JANET_PATH", "JANET_PREFIX"]:
@@ -167,7 +126,7 @@ def build_janet(tempdir, dirname):
         print(res.stderr)
         print(f"Failed to build Janet. RC = {res.returncode}")
         return False
-    print(f"  Built Janet in {dirname}")
+    print(f"  Installed Janet in {dirname}")
     os.chdir(curdir)
     return True
 
@@ -175,7 +134,7 @@ def build_janet(tempdir, dirname):
 def install_spork(tempdir, dirname):
     curdir = os.getcwd()
     os.chdir(tempdir)
-    print(f"Building Spork in {tempdir}")
+    print(f"Building Spork")
 
     env = dict(os.environ)
     for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX"]:
@@ -199,7 +158,7 @@ def install_spork(tempdir, dirname):
 def install_jeep(tempdir, dirname):
     curdir = os.getcwd()
     os.chdir(tempdir)
-    print(f"Building Jeep in {tempdir}")
+    print(f"Building Jeep")
 
     env = dict(os.environ)
     for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX"]:
@@ -229,43 +188,42 @@ def activate_scripts(dirname):
         data = open(inname).read()
         with open(outname, "w") as f:
             f.write(data.format(venv_name=basename, venv_dir=dirname))
-        print(outname)
     return True
 
 
+def error_and_cleanup(venv_path):
+    print("Install failed, cleaning up")
+    shutil.rmtree(venv_path)
+    return 1
+
+
 def main(args):
-    if len(args) < 2:
-        print("Usage: janetup.py <path-to-janet>")
+    args = parse_args()
+    venv_path = args.dirname
+
+    if os.path.exists(venv_path):
+        print(f"Directory {venv_path} already exists.")
         return 1
 
     with tempfile.TemporaryDirectory() as tempdir:
 
-        janet_dir = get_from_github("janet", "janet-lang", tempdir, commit="8fd1672")
-        print(janet_dir)
-
-        spork_dir = get_from_github("spork", "janet-lang", tempdir, branch="master")
-        print(spork_dir)
-
+        janet_dir = get_from_github("janet", "janet-lang", tempdir)
+        spork_dir = get_from_github("spork", "janet-lang", tempdir)
         jeep_dir = get_from_github("jeep", "pyrmont", tempdir, branch="master")
-        print(jeep_dir)
 
-        venv_path = os.path.abspath(args[1])
-        if os.path.exists(venv_path):
-            print("venv already exists.")
-            return 1
-        else:
-            os.makedirs(venv_path)
+        os.makedirs(venv_path)
 
         if not build_janet(janet_dir, venv_path):
-            return 1
+            return error_and_cleanup(venv_path)
         if not install_spork(spork_dir, venv_path):
-            return 1
+            return error_and_cleanup(venv_path)
         if not install_jeep(jeep_dir, venv_path):
-            return 1
+            return error_and_cleanup(venv_path)
 
         # install activate/deactivate scripts
         if not activate_scripts(venv_path):
-            return 1
+            return error_and_cleanup(venv_path)
+
         print(finish.format(venv_path=venv_path))
 
     return 0
