@@ -24,12 +24,41 @@ Created new Janet environment at {venv_path}:
 #(PowerShell) run `. {venv_path}/bin/activate.ps1` to enter the new environment, then `deactivate` to exit.
 #(CMD)        run `{venv_path}\bin\activate` to enter the new environment, then `deactivate` to exit.
 
+epilog = '''
+Where VERSION can be one of several formats:
+
+    release=<release> - choose a specific released version
+    branch=<branch> - choose a specific branch, as in `branch=master`
+    tag=<tag> - choose a specific tag, as in `tag=v1.38.0`
+    commit=<HASH> - choose a specific commit hash, as in `commit=8fd1672`
+
+Default is `release=latest` for Janet, `branch=master` for Spork and Jeep.
+'''
 
 def parse_args():
     parser = argparse.ArgumentParser(
         prog='janetup',
-        description='Install a custom Janet build, in an isolated environment.')
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description='Install a custom Janet build, in an isolated environment.',
+        epilog=epilog)
+
     parser.add_argument('dirname', help="Directory for new Janet build")
+
+    parser.add_argument('--janet',
+                        metavar="VERSION",
+                        default="release=latest",
+                        help="Janet version to install.")
+
+    parser.add_argument('--spork',
+                        metavar="VERSION",
+                        default="branch=master",
+                        help="Spork version to install.")
+
+    parser.add_argument('--jeep',
+                        metavar="VERSION",
+                        default="branch=master",
+                        help="Jeep version to install.")
+
     args = parser.parse_args()
     return args
 
@@ -58,12 +87,12 @@ def get_from_github(name:str, owner:str,
             with open("releases.json") as f:
                 data = json.load(f)
                 releases = [d["tag_name"] for d in data]
-                if release is None:
+                if release is None or release == "latest" and len(releases) > 0:
                     tag = releases[0]
                 elif release in releases:
                     tag = release
                 else:
-                    print(f"Could not find the release {release} in {name} releases.")
+                    print(f"Could not find the release '{release}' for '{name}'.")
                     return None
             os.remove("releases.json")
         file_name = f"{tag}.tar.gz"
@@ -81,14 +110,14 @@ def get_from_github(name:str, owner:str,
     elif commit is not None:
         file_name = f"{commit}.tar.gz"
         url = f"{base_url}/{file_name}"
-        message = f"{name} - commit:{tag}"
+        message = f"{name} - commit:{commit}"
 
     print(f"Downloading {message}")
 
     try:
         path, msg = urllib.request.urlretrieve(url, file_name)
     except urllib.request.HTTPError:
-        print("Could not download {name} @ {url}.")
+        #print(f"Could not download {name} @ {url}.")
         return None
 
     tar = tarfile.open(file_name)
@@ -100,7 +129,7 @@ def get_from_github(name:str, owner:str,
     os.chdir(outdir)
     files = glob.glob(f"{name}*")
     if len(files) == 0:
-        print(f"Could not find {name} @ {url}.")
+        #print(f"Could not find {name} @ {url}.")
         return None
 
     outdir = os.path.abspath(files[0])
@@ -191,6 +220,36 @@ def activate_scripts(dirname):
     return True
 
 
+def validate_version(version):
+    parts = version.strip().split("=")
+    if len(parts) != 2:
+        print(f"Invalid version: {version}")
+        return None
+    if parts[0] not in ["release", "branch", "tag", "commit"]:
+        print(f"Invalid version type: {parts[0]} must be from 'release' or 'branch' or 'tag' or 'commit'")
+        return None
+    return parts[0], parts[1]
+
+
+def get_thing(owner, repo, tempdir, version):
+    parts = validate_version(version)
+    if parts is None:
+        return None
+    res = None
+    if parts[0] == "release":
+        res = get_from_github(repo, owner, tempdir, release=parts[1])
+    elif parts[0] == "branch":
+        res = get_from_github(repo, owner, tempdir, branch=parts[1])
+    elif parts[0] == "tag":
+        res = get_from_github(repo, owner, tempdir, tag=parts[1])
+    elif parts[0] == "commit":
+        res = get_from_github(repo, owner, tempdir, commit=parts[1])
+
+    if res is None:
+        print(f"Unable to get {repo} @ {parts[0]} = {parts[1]}")
+    return res
+
+
 def error_and_cleanup(venv_path):
     print("Install failed, cleaning up")
     shutil.rmtree(venv_path)
@@ -206,10 +265,15 @@ def main(args):
         return 1
 
     with tempfile.TemporaryDirectory() as tempdir:
-
-        janet_dir = get_from_github("janet", "janet-lang", tempdir)
-        spork_dir = get_from_github("spork", "janet-lang", tempdir)
-        jeep_dir = get_from_github("jeep", "pyrmont", tempdir, branch="master")
+        janet_dir = get_thing("janet-lang", "janet", tempdir, version=args.janet)
+        if janet_dir is None:
+            return 1
+        spork_dir = get_thing( "janet-lang", "spork", tempdir, version=args.spork)
+        if spork_dir is None:
+            return 1
+        jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
+        if jeep_dir is None:
+            return 1
 
         os.makedirs(venv_path)
 
