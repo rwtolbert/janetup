@@ -147,6 +147,38 @@ def get_from_github(name:str, owner:str,
     return outdir
 
 
+def install_on_windows(dirname):
+    print(f"Installing Janet to {dirname}")
+    cmds = [
+        "janet.exe tools\\patch-header.janet src\\include\\janet.h src\\conf\\janetconf.h build\\janet.h",
+        "janet.exe tools\\removecr.janet build\\c\\janet.c"
+    ]
+    for cmd in cmds:
+        res = subprocess.run(cmd.split(), shell=True)
+        if res.returncode != 0:
+            print("Unable to install Janet.")
+            return False
+
+    bin_dir = os.path.join(dirname, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    shutil.copy("janet.exe", bin_dir)
+
+    C_dir = os.path.join(dirname, "C")
+    os.makedirs(C_dir, exist_ok=True)
+    shutil.copy("janet.exp", C_dir)
+    shutil.copy("janet.lib", C_dir)
+    shutil.copy("build/c/janet.c", C_dir)
+    shutil.copy("build/libjanet.lib", C_dir)
+    shutil.copy("build/janet.h", C_dir)
+
+    os.makedirs(os.path.join(dirname, "Library"), exist_ok=True)
+
+    shutil.copy("LICENSE", dirname)
+    shutil.copy("README.md", dirname)
+
+    return True
+
+
 def build_janet(tempdir, dirname, git_hash):
     curdir = os.getcwd()
     os.chdir(tempdir)
@@ -158,7 +190,9 @@ def build_janet(tempdir, dirname, git_hash):
         if item in env:
             env.pop(item)
 
-    if sys.platform == "win32":
+    use_meson = False
+
+    if use_meson and sys.platform == "win32":
         cmd = f"meson setup build --buildtype release --optimization 2 --prefix {dirname} -Dgit_hash={git_hash}"
         res = subprocess.run(cmd.split(), env=env)
         if res.returncode != 0:
@@ -198,7 +232,15 @@ def build_janet(tempdir, dirname, git_hash):
                 dest = os.path.join(C_dir, outname)
                 print(f"->> Copying {f} to {dest}")
                 shutil.copy(os.path.join(lib_dir, f), dest)
-
+    elif sys.platform == "win32":
+        # building with build_win.bat
+        cmd = f"build_win.bat"
+        res = subprocess.run(cmd.split(), env=env)
+        if res.returncode != 0:
+            print("Windows build failed.")
+            success = False
+        else: # time to copy some stuff around
+            success = install_on_windows(dirname)
     else:
         cmd = "make install"
         res = subprocess.run(cmd.split(), env=env, capture_output=True)
@@ -228,6 +270,7 @@ def install_spork(tempdir, dirname):
     # help janet/cc find the headers and libs
     if sys.platform == "win32":
         env["JANET_PREFIX"] = dirname
+        env["JANET_PATH"] = os.path.join(dirname, "Library")
 
     cmd = f"{dirname}/bin/janet --install ."
     res = subprocess.run(cmd.split(), env=env)
@@ -334,6 +377,7 @@ def main(args):
 
     curdir = os.getcwd()
     with tempfile.TemporaryDirectory() as tempdir:
+
         janet_dir = get_thing("janet-lang", "janet", tempdir, version=args.janet)
         if janet_dir is None:
             return error_and_cleanup(venv_path, curdir)
@@ -369,6 +413,7 @@ def main(args):
         # install activate/deactivate scripts
         if not activate_scripts(venv_path):
             return error_and_cleanup(venv_path, curdir)
+
         os.chdir(curdir)
 
     if sys.platform == "win32":

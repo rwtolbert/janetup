@@ -14,7 +14,7 @@ if (-not ([string]::IsNullOrEmpty($env:JANET_PREFIX))) {{
 
 # store old JANET_BINPATH, if it exists
 if (-not ([string]::IsNullOrEmpty($env:JANET_BINPATH))) {{
-  $global:_OLD_JANET_BINPATH0=$env:JANET_BINPATH
+  $global:_OLD_JANET_BINPATH=$env:JANET_BINPATH
   Remove-Item env:JANET_BINPATH
 }}
 
@@ -36,13 +36,14 @@ if (-not ([string]::IsNullOrEmpty($env:JANET_MANPATH))) {{
   Remove-Item env:JANET_MANPATH
 }}
 
-# inside, we only set these two, for now
+# inside, we only set these for now, for now
 $env:JANET_VIRTUAL_ENV="{venv_name}"
 $env:JANET_PREFIX="{venv_dir}"
+$env:JANET_PATH="{venv_dir}/Library"
 
 # store old PATH
 $global:_OLD_PATH=$env:PATH
-$env:PATH=$env:JANET_PREFIX + "\lib\janet\bin;" + $env:PATH
+$env:PATH=$env:JANET_PREFIX + "\Library\bin;" + $env:PATH
 $env:PATH=$env:JANET_PREFIX + "\bin;" + $env:PATH
 
 $function:old_prompt = $function:prompt
@@ -58,6 +59,7 @@ function deactivate {{
   Remove-Variable -Name _OLD_PATH -Scope Global
 
   # restore old JANET_PATH, if it exists
+  Remove-Item env:\JANET_PATH
   if ((Test-Path variable:global:_OLD_JANET_PATH) -and -not ([string]::IsNullOrEmpty($global:_OLD_JANET_PATH))) {{
     $env:JANET_PATH=$global:_OLD_JANET_PATH
     Remove-Variable -Name _OLD_JANET_PATH -Scope Global
