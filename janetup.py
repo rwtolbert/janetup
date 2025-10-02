@@ -2,6 +2,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,14 @@ Created new Janet environment at {venv_path}:
 (Fish)
     run `source {venv_path}/bin/activate.fish` to enter
     the new environment, then `deactivate` to exit.
+"""
+
+finish_win32 = """
+Created new Janet environment at {venv_path}:
+
+(Powershell)
+    `. {venv_path}\\bin\\activate.ps1`
+    to enter the new environment, then `deactivate` to exit.
 """
 
 # waiting for Windows support
@@ -138,26 +147,71 @@ def get_from_github(name:str, owner:str,
     return outdir
 
 
-def build_janet(tempdir, dirname):
+def build_janet(tempdir, dirname, git_hash):
     curdir = os.getcwd()
     os.chdir(tempdir)
     print(f"Building Janet, PREFIX={dirname}")
 
+    success = True
     env = dict(os.environ, PREFIX=dirname)
     for item in ["JANET_PATH", "JANET_PREFIX"]:
         if item in env:
             env.pop(item)
 
-    cmd = "make install"
-    res = subprocess.run(cmd.split(), env=env, capture_output=True)
-    if res.returncode != 0:
-        print(res.stdout)
-        print(res.stderr)
-        print(f"Failed to build Janet. RC = {res.returncode}")
-        return False
-    print(f"  Installed Janet in {dirname}")
+    if sys.platform == "win32":
+        cmd = f"meson setup build --buildtype release --optimization 2 --prefix {dirname} -Dgit_hash={git_hash}"
+        res = subprocess.run(cmd.split(), env=env)
+        if res.returncode != 0:
+            print("Meson failed.")
+            success = False
+        else:
+            cmd = "ninja -C build"
+            res = subprocess.run(cmd.split(), env=env)
+            if res.returncode != 0:
+                print("Ninja failed.")
+                success = False
+            else:
+                cmd = "ninja -C build install"
+                res = subprocess.run(cmd.split(), env=env)
+                if res.returncode != 0:
+                    print("Ninja install failed.")
+                    success = False
+
+        # need to do some fixup for expected Windows file paths
+        # this is really a fix that should be put into the Meson build itself
+        # when running on Windows.
+        if success:
+            # janet.h
+            C_dir = os.path.join(dirname, "C")
+            os.makedirs(C_dir)
+            include_dir = os.path.join(os.path.join(dirname, "include/janet"))
+            h_files = glob.glob(os.path.join(include_dir, "janet*h"))
+            if len(h_files) == 1:
+                shutil.copy(os.path.join(include_dir, h_files[0]), os.path.join(C_dir, "janet.h"))
+            # janet.lib
+            lib_dir = os.path.join(os.path.join(dirname, "lib"))
+            lib_files = glob.glob(os.path.join(lib_dir, "*.*"))
+            for f in lib_files:
+                outname = os.path.basename(f)
+                if outname == "libjanet.a":
+                    outname = "libjanet.lib"
+                dest = os.path.join(C_dir, outname)
+                print(f"->> Copying {f} to {dest}")
+                shutil.copy(os.path.join(lib_dir, f), dest)
+
+    else:
+        cmd = "make install"
+        res = subprocess.run(cmd.split(), env=env, capture_output=True)
+        if res.returncode != 0:
+            print(res.stdout)
+            print(res.stderr)
+            print(f"Failed to build Janet. RC = {res.returncode}")
+            success = False
+
+    if success:
+        print(f"  Installed Janet in {dirname}")
     os.chdir(curdir)
-    return True
+    return success
 
 
 def install_spork(tempdir, dirname):
@@ -166,12 +220,17 @@ def install_spork(tempdir, dirname):
     print(f"Building Spork")
 
     env = dict(os.environ)
-    for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX"]:
+    for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX", "JANET_BINPATH",
+                 "JANET_LIBPATH", "JANET_HEADERPATH", "JANET_MANPATH"]:
         if item in env:
             env.pop(item)
 
+    # help janet/cc find the headers and libs
+    if sys.platform == "win32":
+        env["JANET_PREFIX"] = dirname
+
     cmd = f"{dirname}/bin/janet --install ."
-    res = subprocess.run(cmd.split(), env=env, capture_output=True)
+    res = subprocess.run(cmd.split(), env=env)
     if res.returncode != 0:
         print(res.stdout)
         print(res.stderr)
@@ -194,6 +253,10 @@ def install_jeep(tempdir, dirname):
         if item in env:
             env.pop(item)
 
+    # help janet/cc find the headers and libs
+    if sys.platform == "win32":
+        env["JANET_PREFIX"] = dirname
+
     cmd = f"{dirname}/bin/janet --install ."
     res = subprocess.run(cmd.split(), env=env, capture_output=True)
     if res.returncode != 0:
@@ -210,7 +273,10 @@ def install_jeep(tempdir, dirname):
 
 def activate_scripts(dirname):
     basename = os.path.basename(dirname)
-    inputs = ["activate", "activate.fish"]
+    if sys.platform == "win32":
+        inputs = ["activate.ps1"]
+    else:
+        inputs = ["activate", "activate.fish"]
     for input in inputs:
         inname = os.path.join("scripts", input)
         outname = os.path.join(os.path.join(dirname, "bin"), input)
@@ -250,44 +316,64 @@ def get_thing(owner, repo, tempdir, version):
     return res
 
 
-def error_and_cleanup(venv_path):
+def error_and_cleanup(venv_path, curdir):
+    os.chdir(curdir)
     print("Install failed, cleaning up")
-    shutil.rmtree(venv_path)
+    if os.path.isdir(venv_path):
+        shutil.rmtree(venv_path)
     return 1
 
 
 def main(args):
     args = parse_args()
-    venv_path = args.dirname
+    venv_path = os.path.abspath(args.dirname)
 
     if os.path.exists(venv_path):
         print(f"Directory {venv_path} already exists.")
         return 1
 
+    curdir = os.getcwd()
     with tempfile.TemporaryDirectory() as tempdir:
         janet_dir = get_thing("janet-lang", "janet", tempdir, version=args.janet)
         if janet_dir is None:
-            return 1
+            return error_and_cleanup(venv_path, curdir)
+
+        # get hash for build
+        base_name = os.path.basename(janet_dir)
+        parts = base_name.split("-")
+        if len(parts) == 2 and len(parts[1]) == 40 and re.match(r"[0-9a-f]", parts[1]):
+            git_hash = parts[1][:7]
+        else:
+            git_hash = "local"
+
         spork_dir = get_thing( "janet-lang", "spork", tempdir, version=args.spork)
         if spork_dir is None:
-            return 1
-        jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
-        if jeep_dir is None:
-            return 1
+            return error_and_cleanup(venv_path, curdir)
 
         os.makedirs(venv_path)
 
-        if not build_janet(janet_dir, venv_path):
-            return error_and_cleanup(venv_path)
+        if not build_janet(janet_dir, venv_path, git_hash):
+            return error_and_cleanup(venv_path, curdir)
         if not install_spork(spork_dir, venv_path):
-            return error_and_cleanup(venv_path)
-        if not install_jeep(jeep_dir, venv_path):
-            return error_and_cleanup(venv_path)
+            return error_and_cleanup(venv_path, curdir)
+
+        if sys.platform == "win32":
+            print("skipping Jeep on Windows")
+        else:
+            jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
+            if jeep_dir is None:
+                return error_and_cleanup(venv_path, curdir)
+            if not install_jeep(jeep_dir, venv_path):
+                return error_and_cleanup(venv_path, curdir)
 
         # install activate/deactivate scripts
         if not activate_scripts(venv_path):
-            return error_and_cleanup(venv_path)
+            return error_and_cleanup(venv_path, curdir)
+        os.chdir(curdir)
 
+    if sys.platform == "win32":
+        print(finish_win32.format(venv_path=venv_path))
+    else:
         print(finish.format(venv_path=venv_path))
 
     return 0
