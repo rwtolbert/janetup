@@ -68,6 +68,9 @@ def parse_args():
                         default="branch=master",
                         help="Jeep version to install.")
 
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',help="Show verbose output")
+
     args = parser.parse_args()
     return args
 
@@ -138,7 +141,6 @@ def get_from_github(name:str, owner:str,
     os.chdir(outdir)
     files = glob.glob(f"{name}*")
     if len(files) == 0:
-        #print(f"Could not find {name} @ {url}.")
         return None
 
     outdir = os.path.abspath(files[0])
@@ -179,10 +181,15 @@ def install_on_windows(dirname):
     return True
 
 
-def build_janet(tempdir, dirname, git_hash):
+def build_janet(tempdir, dirname, git_hash, args):
     curdir = os.getcwd()
     os.chdir(tempdir)
     print(f"Building Janet, PREFIX={dirname}")
+
+    if args.verbose:
+        stdout_handle = sys.stdout
+    else:
+        stdout_handle = subprocess.PIPE
 
     success = True
     env = dict(os.environ, PREFIX=dirname)
@@ -235,17 +242,21 @@ def build_janet(tempdir, dirname, git_hash):
     elif sys.platform == "win32":
         # building with build_win.bat
         cmd = f"build_win.bat"
-        res = subprocess.run(cmd.split(), env=env)
+        res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
         if res.returncode != 0:
+            if not args.verbose:
+                print(res.stdout)
+            print(res.stderr)
             print("Windows build failed.")
             success = False
         else: # time to copy some stuff around
             success = install_on_windows(dirname)
     else:
         cmd = "make install"
-        res = subprocess.run(cmd.split(), env=env, capture_output=True)
+        res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
         if res.returncode != 0:
-            print(res.stdout)
+            if not args.verbose:
+                print(res.stdout)
             print(res.stderr)
             print(f"Failed to build Janet. RC = {res.returncode}")
             success = False
@@ -256,10 +267,15 @@ def build_janet(tempdir, dirname, git_hash):
     return success
 
 
-def install_spork(tempdir, dirname):
+def install_spork(tempdir, dirname, args):
     curdir = os.getcwd()
     os.chdir(tempdir)
     print(f"Building Spork")
+
+    if args.verbose:
+        stdout_handle = sys.stdout
+    else:
+        stdout_handle = subprocess.PIPE
 
     env = dict(os.environ)
     for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX", "JANET_BINPATH",
@@ -273,9 +289,10 @@ def install_spork(tempdir, dirname):
         env["JANET_PATH"] = os.path.join(dirname, "Library")
 
     cmd = f"{dirname}/bin/janet --install ."
-    res = subprocess.run(cmd.split(), env=env)
+    res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
     if res.returncode != 0:
-        print(res.stdout)
+        if not args.verbose:
+            print(res.stdout)
         print(res.stderr)
         print(f"Failed to install Spork. RC = {res.returncode}")
         return False
@@ -286,13 +303,19 @@ def install_spork(tempdir, dirname):
     return True
 
 
-def install_jeep(tempdir, dirname):
+def install_jeep(tempdir, dirname, args):
     curdir = os.getcwd()
     os.chdir(tempdir)
     print(f"Building Jeep")
 
+    if args.verbose:
+        stdout_handle = sys.stdout
+    else:
+        stdout_handle = subprocess.PIPE
+
     env = dict(os.environ)
-    for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX"]:
+    for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX", "JANET_BINPATH",
+                 "JANET_LIBPATH", "JANET_HEADERPATH", "JANET_MANPATH"]:
         if item in env:
             env.pop(item)
 
@@ -301,9 +324,10 @@ def install_jeep(tempdir, dirname):
         env["JANET_PREFIX"] = dirname
 
     cmd = f"{dirname}/bin/janet --install ."
-    res = subprocess.run(cmd.split(), env=env, capture_output=True)
+    res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
     if res.returncode != 0:
-        print(res.stdout)
+        if not args.verbose:
+            print(res.stdout)
         print(res.stderr)
         print(f"Failed to install Jeep. RC = {res.returncode}")
         return False
@@ -396,9 +420,9 @@ def main(args):
 
         os.makedirs(venv_path)
 
-        if not build_janet(janet_dir, venv_path, git_hash):
+        if not build_janet(janet_dir, venv_path, git_hash, args):
             return error_and_cleanup(venv_path, curdir)
-        if not install_spork(spork_dir, venv_path):
+        if not install_spork(spork_dir, venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 
         if sys.platform == "win32":
@@ -407,7 +431,7 @@ def main(args):
             jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
             if jeep_dir is None:
                 return error_and_cleanup(venv_path, curdir)
-            if not install_jeep(jeep_dir, venv_path):
+            if not install_jeep(jeep_dir, venv_path, args):
                 return error_and_cleanup(venv_path, curdir)
 
         # install activate/deactivate scripts
