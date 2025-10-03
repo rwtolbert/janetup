@@ -369,7 +369,7 @@ def error_and_cleanup(venv_path, curdir):
 
 def main(args):
     args = parse_args()
-    venv_path = os.path.abspath(args.dirname)
+    venv_path = os.path.abspath(os.path.expanduser(args.dirname))
 
     if os.path.exists(venv_path):
         print(f"Directory {venv_path} already exists.")

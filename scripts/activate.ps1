@@ -1,5 +1,17 @@
 # . bin/activate.ps1
 
+if ($MyInvocation.InvocationName -ne ".")
+{{
+    Write-Host "Warning: running as a regular script will not work." -ForegroundColor DarkYellow
+    Write-Host
+    Write-Host "In order to activate this enviroment, 'dot-source' the file:" -ForegroundColor Green
+    Write-Host
+    Write-Host "  '. $($MyInvocation.MyCommand.Definition)'"
+    Write-Host
+    Write-Host "Please try again." -ForegroundColor Green
+    Exit 1
+}}
+
 # store old JANET_PATH, if it exists
 if (-not ([string]::IsNullOrEmpty($env:JANET_PATH))) {{
   $global:_OLD_JANET_PATH=$env:JANET_PATH
@@ -39,7 +51,7 @@ if (-not ([string]::IsNullOrEmpty($env:JANET_MANPATH))) {{
 # inside, we only set these for now, for now
 $env:JANET_VIRTUAL_ENV="{venv_name}"
 $env:JANET_PREFIX="{venv_dir}"
-$env:JANET_PATH="{venv_dir}/Library"
+$env:JANET_PATH="{venv_dir}\Library"
 
 # store old PATH
 $global:_OLD_PATH=$env:PATH
