@@ -322,6 +322,7 @@ def install_jeep(tempdir, dirname, args):
     # help janet/cc find the headers and libs
     if sys.platform == "win32":
         env["JANET_PREFIX"] = dirname
+        env["JANET_PATH"] = os.path.join(dirname, "Library")
 
     cmd = f"{dirname}/bin/janet --install ."
     res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
@@ -425,14 +426,11 @@ def main(args):
         if not install_spork(spork_dir, venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 
-        if sys.platform == "win32":
-            print("skipping Jeep on Windows")
-        else:
-            jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
-            if jeep_dir is None:
-                return error_and_cleanup(venv_path, curdir)
-            if not install_jeep(jeep_dir, venv_path, args):
-                return error_and_cleanup(venv_path, curdir)
+        jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
+        if jeep_dir is None:
+            return error_and_cleanup(venv_path, curdir)
+        if not install_jeep(jeep_dir, venv_path, args):
+            return error_and_cleanup(venv_path, curdir)
 
         # install activate/deactivate scripts
         if not activate_scripts(venv_path):
