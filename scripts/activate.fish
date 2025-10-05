@@ -39,7 +39,7 @@ set -e JANET_PATH
 set -gx _OLD_PATH "$PATH";
 
 set -gx JANET_VIRTUAL_ENV "{venv_name}"
-set -gx PATH "{venv_dir}"/bin "{venv_dir}"/lib/janet/bin $PATH
+set -gx PATH "{venv_dir}/bin" "{venv_dir}/lib/janet/bin" $PATH
 
 if test -z "$VIRTUAL_ENV_DISABLE_PROMPT"
     # fish uses a function instead of an env var to generate the prompt.

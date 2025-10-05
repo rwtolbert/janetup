@@ -10,6 +10,8 @@ import tarfile
 import urllib.request
 import tempfile
 
+src_dir = os.path.dirname(os.path.abspath(__file__))
+
 finish = """
 Created new Janet environment at {venv_path}:
 
@@ -346,7 +348,7 @@ def activate_scripts(dirname):
     else:
         inputs = ["activate", "activate.fish"]
     for input in inputs:
-        inname = os.path.join("scripts", input)
+        inname = os.path.join(src_dir, os.path.join("scripts", input))
         outname = os.path.join(os.path.join(dirname, "bin"), input)
         data = open(inname).read()
         with open(outname, "w") as f:
