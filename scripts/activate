@@ -1,20 +1,28 @@
 # . bin/activate
 
-# store a JANET_PATH if exist before
+# store a JANET_PATH if it exists before
 if [[ -v JANET_PATH && -n $JANET_PATH ]] ; then
     _OLD_JANET_PATH="$JANET_PATH";
     export _OLD_JANET_PATH;
+fi
+
+# store a JANET_BUILD_TYPE if it exists before
+if [[ -v JANET_BUILD_TYPE && -n $JANET_BUILD_TYPE ]] ; then
+    _OLD_JANET_BUILD_TYPE="$JANET_BUILD_TYPE";
+    export _OLD_JANET_BUILD_TYPE;
 fi
 
 _OLD_PATH="$PATH";
 _OLD_PS1="$PS1";
 JPATH="{venv_dir}";
 PATH="$JPATH"/bin:"$JPATH"/lib/janet/bin:"$PATH";
+JANET_BUILD_TYPE="{build_type}"
 PS1="("{venv_name}") ${{PS1:-}}"
 export _OLD_PATH;
 export _OLD_PS1;
 export PATH;
 export PS1;
+export JANET_BUILD_TYPE
 
 # don't use JANET_PATH inside here
 unset JANET_PATH;
@@ -26,14 +34,20 @@ deactivate() {{
       JANET_PATH="$_OLD_JANET_PATH";
       export JANET_PATH;
   fi
+  if [[ -v _OLD_JANET_BUILD_TYPE && -n $_OLD_JANET_BUILD_TYPE ]] ; then
+      JANET_BUILD_TYPE="$_OLD_JANET_BUILD_TYPE";
+      export JANET_BUILD_TYPE;
+  fi
   PS1="$_OLD_PS1";
   export PATH;
   export PS1;
   unset _OLD_JANET_PATH;
+  unset _OLD_JANET_BUILD_TYPE;
   unset _OLD_PATH;
   unset _OLD_PS1;
   unset -f deactivate;
   export _OLD_JANET_PATH;
+  export _OLD_JANET_BUILD_TYPE;
   export _OLD_PATH;
   export _OLD_PS1;
   hash -r 2> /dev/null;

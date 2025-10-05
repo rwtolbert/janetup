@@ -48,10 +48,17 @@ if (-not ([string]::IsNullOrEmpty($env:JANET_MANPATH))) {{
   Remove-Item env:JANET_MANPATH
 }}
 
-# inside, we only set these for now, for now
+# store old JANET_BUILD_TYPE, if it exists
+if (-not ([string]::IsNullOrEmpty($env:JANET_BUILD_TYPE))) {{
+  $global:_OLD_JANET_BUILD_TYPE=$env:JANET_BUILD_TYPE
+  Remove-Item env:JANET_BUILD_TYPE
+}}
+
+# inside, we only set these
 $env:JANET_VIRTUAL_ENV="{venv_name}"
 $env:JANET_PREFIX="{venv_dir}"
 $env:JANET_PATH="{venv_dir}\Library"
+$env:JANET_BUILD_TYPE="{build_type}"
 
 # store old PATH
 $global:_OLD_PATH=$env:PATH
@@ -102,10 +109,16 @@ function deactivate {{
     Remove-Variable -Name _OLD_JANET_LIBPATH -Scope Global
   }}
 
-  # restore old JANET_MANPATH, if it exists4
+  # restore old JANET_MANPATH, if it exists
   if ((Test-Path variable:global:_OLD_JANET_MANPATH) -and -not ([string]::IsNullOrEmpty($global:_OLD_JANET_MANPATH))) {{
     $env:JANET_MANPATH=$global:_OLD_JANET_MANPATH
     Remove-Variable -Name _OLD_JANET_MANPATH -Scope Global
+  }}
+
+  # restore old JANET_BUILD_TYPE, if it exists
+  if ((Test-Path variable:global:_OLD_JANET_BUILD_TYPE) -and -not ([string]::IsNullOrEmpty($global:_OLD_JANET_BUILD_TYPE))) {{
+    $env:JANET_BUILD_TYPE=$global:_OLD_JANET_BUILD_TYPE
+    Remove-Variable -Name _OLD_JANET_BUILD_TYPE -Scope Global
   }}
 
   Remove-Item env:\JANET_VIRTUAL_ENV

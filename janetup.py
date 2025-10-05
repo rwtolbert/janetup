@@ -70,11 +70,16 @@ def parse_args():
                         default="branch=master",
                         help="Jeep version to install.")
 
+    parser.add_argument('--build_type', default='develop',
+                        choices=['debug', 'develop', 'release'],
+                        help="Build type to for install. Also sets JANET_BUILD_TYPE in new environment.")
+
     parser.add_argument('-v', '--verbose',
                         action='store_true',help="Show verbose output")
 
     args = parser.parse_args()
     return args
+
 
 def get_from_github(name:str, owner:str,
                     temp_dir:str,
@@ -199,10 +204,12 @@ def build_janet(tempdir, dirname, git_hash, args):
         if item in env:
             env.pop(item)
 
+    env["JANET_BUILD_TYPE"] = args.build_type
+
     use_meson = False
 
     if use_meson and sys.platform == "win32":
-        cmd = f"meson setup build --buildtype release --optimization 2 --prefix {dirname} -Dgit_hash={git_hash}"
+        cmd = f"meson setup build --buildtype {args.build_type} --optimization 2 --prefix {dirname} -Dgit_hash={git_hash}"
         res = subprocess.run(cmd.split(), env=env)
         if res.returncode != 0:
             print("Meson failed.")
@@ -290,6 +297,8 @@ def install_spork(tempdir, dirname, args):
         env["JANET_PREFIX"] = dirname
         env["JANET_PATH"] = os.path.join(dirname, "Library")
 
+    env["JANET_BUILD_TYPE"] = args.build_type
+
     cmd = f"{dirname}/bin/janet --install ."
     res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
     if res.returncode != 0:
@@ -341,7 +350,7 @@ def install_jeep(tempdir, dirname, args):
     return True
 
 
-def activate_scripts(dirname):
+def activate_scripts(dirname, args):
     basename = os.path.basename(dirname)
     if sys.platform == "win32":
         inputs = ["activate.ps1"]
@@ -352,7 +361,7 @@ def activate_scripts(dirname):
         outname = os.path.join(os.path.join(dirname, "bin"), input)
         data = open(inname).read()
         with open(outname, "w") as f:
-            f.write(data.format(venv_name=basename, venv_dir=dirname))
+            f.write(data.format(venv_name=basename, venv_dir=dirname, build_type=args.build_type))
     return True
 
 
@@ -435,7 +444,7 @@ def main(args):
             return error_and_cleanup(venv_path, curdir)
 
         # install activate/deactivate scripts
-        if not activate_scripts(venv_path):
+        if not activate_scripts(venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 
         os.chdir(curdir)

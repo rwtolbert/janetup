@@ -13,6 +13,11 @@ function deactivate -d "Exit Janet environment and return to normal shell enviro
     end
     set -e _OLD_JANET_PATH
 
+    if test -n "$_OLD_JANET_BUILD_TYPE"
+        set -gx JANET_BUILD_TYPE $_OLD_JANET_BUILD_TYPE
+    end
+    set -e _OLD_JANET_BUILD_TYPE
+
     if test -n "$_OLD_FISH_PROMPT_OVERRIDE"
         functions -e fish_prompt
         functions -c _old_fish_prompt fish_prompt
@@ -36,8 +41,11 @@ deactivate nondestructive
 set -gx _OLD_JANET_PATH "$JANET_PATH";
 set -e JANET_PATH
 
+set -gx _OLD_JANET_BUILD_TYPE "$JANET_BUILD_TYPE"
+
 set -gx _OLD_PATH "$PATH";
 
+set -gx JANET_BUILD_TYPE "{build_type}"
 set -gx JANET_VIRTUAL_ENV "{venv_name}"
 set -gx PATH "{venv_dir}/bin" "{venv_dir}/lib/janet/bin" $PATH
 
