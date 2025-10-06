@@ -12,6 +12,11 @@ if ($MyInvocation.InvocationName -ne ".")
     Exit 1
 }}
 
+if (-not ([string]::IsNullOrEmpty($env:JANET_CURRENT_ENV))) {{
+    Write-Host "There is already a Janet env active, please run 'unload_janet' first." -ForegroundColor DarkYellow
+    Exit 1
+}}
+
 # store old JANET_PATH, if it exists
 if (-not ([string]::IsNullOrEmpty($env:JANET_PATH))) {{
   $global:_OLD_JANET_PATH=$env:JANET_PATH
@@ -55,7 +60,7 @@ if (-not ([string]::IsNullOrEmpty($env:JANET_BUILD_TYPE))) {{
 }}
 
 # inside, we only set these
-$env:JANET_VIRTUAL_ENV="{venv_name}"
+$env:JANET_CURRENT_ENV="{venv_name}"
 $env:JANET_PREFIX="{venv_dir}"
 $env:JANET_PATH="{venv_dir}\Library"
 $env:JANET_BUILD_TYPE="{build_type}"
@@ -116,12 +121,13 @@ function unload_janet {{
   }}
 
   # restore old JANET_BUILD_TYPE, if it exists
+  Remove-Item env:\JANET_BUILD_TYPE
   if ((Test-Path variable:global:_OLD_JANET_BUILD_TYPE) -and -not ([string]::IsNullOrEmpty($global:_OLD_JANET_BUILD_TYPE))) {{
     $env:JANET_BUILD_TYPE=$global:_OLD_JANET_BUILD_TYPE
     Remove-Variable -Name _OLD_JANET_BUILD_TYPE -Scope Global
   }}
 
-  Remove-Item env:\JANET_VIRTUAL_ENV
+  Remove-Item env:\JANET_CURRENT_ENV
 
   Remove-Item function:\unload_janet
   $function:prompt = $function:old_prompt

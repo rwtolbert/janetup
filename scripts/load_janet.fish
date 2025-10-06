@@ -2,7 +2,7 @@
 # (https://fishshell.com/); you cannot run it directly.
 
 if test -n "$JANET_CURRENT_ENV"
-    echo "There is already a Janet env active, please run `unload_janet` first."
+    echo "There is already a Janet env active, please run 'unload_janet' first."
     return
 end
 

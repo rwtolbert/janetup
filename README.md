@@ -14,24 +14,24 @@ Python3, MSVC compiler
 
 ## Installation
 
-Clone this repo and run `janetup.py <dirname>` to create
-everything in a new directory including scripts to activate 
-and deactivate this version in you shell.
+Clone this repo and run `python3 janetup.py <dirname>` to create
+everything in a new directory including scripts to load 
+and unload this version in your shell.
 
-Once the script has completed, activate this new environment 
+Once the script has completed, load this new environment 
 with one of the provided scripts:
 
 ### (Bash/ZSH) 
 
-run `. <dirname>/bin/activate` to enter the new environment, then `deactivate` to exit.
+run `. <dirname>/bin/load_janet` to enter the new environment, then `unload_janet` to exit.
 
 ### (Fish)
 
-run `source <dirname>/bin/activate.fish` to enter the new environment, then `deactivate` to exit.
+run `source <dirname>/bin/load_janet.fish` to enter the new environment, then `unload_janet` to exit.
 
 ### (Powershell)
 
-run `. <dirname>/bin/activate.ps1` to enter the new environment, then `deactivate` to exit.
+run `. <dirname>/bin/load_janet.ps1` to enter the new environment, then `unload_janet` to exit.
 
 ### To create a new Janet in `janet-dev` on macOS/Linux:
 
@@ -60,7 +60,7 @@ Note: Jeep is not installed on Windows for now.
 
 ```shell
 $ python3 .\janetup.py c:\Users\user\test2
-$ source c:\Users\user\test2\bin\activate.ps1
+$ source c:\Users\user\test2\bin\load_janet.ps1
 $ janet-pm show-config
 build dir:  _build
 build type: release

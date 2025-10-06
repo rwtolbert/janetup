@@ -17,10 +17,10 @@ Created new Janet environment at {venv_path}:
 
 (Bash/Zsh)
     run `source {venv_path}/bin/load_janet` to enter
-    the new environment, then `deactivate` to exit.
+    the new environment, then run 'unload_janet' to exit.
 (Fish)
     run `source {venv_path}/bin/load_janet.fish` to enter
-    the new environment, then `deactivate` to exit.
+    the new environment, then run 'unload_janet' to exit.
 """
 
 finish_win32 = """
@@ -28,7 +28,7 @@ Created new Janet environment at {venv_path}:
 
 (Powershell)
     `. {venv_path}\\bin\\load_janet.ps1`
-    to enter the new environment, then `deactivate` to exit.
+    to enter the new environment, then run 'unload_janet' to exit.
 """
 
 # waiting for Windows support
