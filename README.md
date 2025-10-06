@@ -37,7 +37,7 @@ run `. <dirname>/bin/activate.ps1` to enter the new environment, then `deactivat
 
 ```shell
 $ python janetup.py /home/user/jenvs/janet-dev
-$ source /home/user/jenvs/janet-dev/bin/activate
+$ source /home/user/jenvs/janet-dev/bin/load_janet
 $ jeep list
 Installed bundles:
    jeep (DEVEL)

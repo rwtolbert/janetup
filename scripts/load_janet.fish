@@ -1,18 +1,25 @@
-# This file must be used with "source <venv>/bin/activate.fish" *from fish*
+# This file must be used with "source <venv>/bin/load_janet.fish" *from fish*
 # (https://fishshell.com/); you cannot run it directly.
 
-function deactivate -d "Exit Janet environment and return to normal shell environment"
+if test -n "$JANET_CURRENT_ENV"
+    echo "There is already a Janet env active, please run `unload_janet` first."
+    return
+end
+
+function unload_janet -d "Exit Janet environment and return to normal shell environment"
     # reset old environment variables
     if test -n "$_OLD_PATH"
         set -gx PATH $_OLD_PATH
     end
     set -e _OLD_PATH
 
+    set -e JANET_PATH
     if test -n "$_OLD_JANET_PATH"
         set -gx JANET_PATH $_OLD_JANET_PATH
     end
     set -e _OLD_JANET_PATH
 
+    set -e JANET_BUILD_TYPE
     if test -n "$_OLD_JANET_BUILD_TYPE"
         set -gx JANET_BUILD_TYPE $_OLD_JANET_BUILD_TYPE
     end
@@ -25,15 +32,12 @@ function deactivate -d "Exit Janet environment and return to normal shell enviro
     end
     set -e _OLD_FISH_PROMPT_OVERRIDE
 
-    set -e JANET_VIRTUAL_ENV
+    set -e JANET_CURRENT_ENV
     if test "$argv[1]" != "nondestructive"
         # Self-destruct!
-        functions -e deactivate
+        functions -e unload_janet
     end
 end
-
-# Unset irrelevant variables.
-deactivate nondestructive
 
 # don't use JANET_PATH in here
 # store an old one from outside, but don't set a new
@@ -41,12 +45,13 @@ deactivate nondestructive
 set -gx _OLD_JANET_PATH "$JANET_PATH";
 set -e JANET_PATH
 
-set -gx _OLD_JANET_BUILD_TYPE "$JANET_BUILD_TYPE"
+if test -n "$JANET_BUILD_TYPE"
+    set -gx _OLD_JANET_BUILD_TYPE "$JANET_BUILD_TYPE"
+end
+set -gx JANET_BUILD_TYPE "{build_type}"
 
 set -gx _OLD_PATH "$PATH";
-
-set -gx JANET_BUILD_TYPE "{build_type}"
-set -gx JANET_VIRTUAL_ENV "{venv_name}"
+set -gx JANET_CURRENT_ENV "{venv_name}"
 set -gx PATH "{venv_dir}/bin" "{venv_dir}/lib/janet/bin" $PATH
 
 if test -z "$VIRTUAL_ENV_DISABLE_PROMPT"

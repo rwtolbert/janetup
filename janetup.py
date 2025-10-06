@@ -16,10 +16,10 @@ finish = """
 Created new Janet environment at {venv_path}:
 
 (Bash/Zsh)
-    run `source {venv_path}/bin/activate` to enter
+    run `source {venv_path}/bin/load_janet` to enter
     the new environment, then `deactivate` to exit.
 (Fish)
-    run `source {venv_path}/bin/activate.fish` to enter
+    run `source {venv_path}/bin/load_janet.fish` to enter
     the new environment, then `deactivate` to exit.
 """
 
@@ -27,13 +27,12 @@ finish_win32 = """
 Created new Janet environment at {venv_path}:
 
 (Powershell)
-    `. {venv_path}\\bin\\activate.ps1`
+    `. {venv_path}\\bin\\load_janet.ps1`
     to enter the new environment, then `deactivate` to exit.
 """
 
 # waiting for Windows support
-#(PowerShell) run `. {venv_path}/bin/activate.ps1` to enter the new environment, then `deactivate` to exit.
-#(CMD)        run `{venv_path}\bin\activate` to enter the new environment, then `deactivate` to exit.
+#(CMD)        run `{venv_path}\bin\load_janet.bat` to enter the new environment, then `unload_janet.bat` to exit.
 
 epilog = '''
 Where VERSION can be one of several formats:
@@ -353,9 +352,9 @@ def install_jeep(tempdir, dirname, args):
 def activate_scripts(dirname, args):
     basename = os.path.basename(dirname)
     if sys.platform == "win32":
-        inputs = ["activate.ps1"]
+        inputs = ["load_janet.ps1"]
     else:
-        inputs = ["activate", "activate.fish"]
+        inputs = ["load_janet", "load_janet.fish"]
     for input in inputs:
         inname = os.path.join(src_dir, os.path.join("scripts", input))
         outname = os.path.join(os.path.join(dirname, "bin"), input)
@@ -443,7 +442,7 @@ def main(args):
         if not install_jeep(jeep_dir, venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 
-        # install activate/deactivate scripts
+        # install load_janet/deactivate scripts
         if not activate_scripts(venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 

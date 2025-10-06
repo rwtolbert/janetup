@@ -72,7 +72,7 @@ function global:prompt {{
   & $function:old_prompt
 }}
 
-function deactivate {{
+function unload_janet {{
   # restore PATH
   $env:PATH=$global:_OLD_PATH
   Remove-Variable -Name _OLD_PATH -Scope Global
@@ -123,7 +123,7 @@ function deactivate {{
 
   Remove-Item env:\JANET_VIRTUAL_ENV
 
-  Remove-Item function:\deactivate
+  Remove-Item function:\unload_janet
   $function:prompt = $function:old_prompt
   Remove-Item function:\old_prompt
 }}
