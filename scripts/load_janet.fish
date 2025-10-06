@@ -19,6 +19,12 @@ function unload_janet -d "Exit Janet environment and return to normal shell envi
     end
     set -e _OLD_JANET_PATH
 
+    set -e JANET_PREFIX
+    if test -n "$_OLD_JANET_PREFIX"
+        set -gx JANET_PREFIX $_OLD_JANET_PREFIX
+    end
+    set -e _OLD_JANET_PREFIX
+
     set -e JANET_BUILD_TYPE
     if test -n "$_OLD_JANET_BUILD_TYPE"
         set -gx JANET_BUILD_TYPE $_OLD_JANET_BUILD_TYPE
@@ -39,11 +45,14 @@ function unload_janet -d "Exit Janet environment and return to normal shell envi
     end
 end
 
-# don't use JANET_PATH in here
+# don't use JANET_PATH/JANET_PREFIX in here
 # store an old one from outside, but don't set a new
 # one
 set -gx _OLD_JANET_PATH "$JANET_PATH";
 set -e JANET_PATH
+
+set -gx _OLD_JANET_PREFIX "$JANET_PREFIX";
+set -e JANET_PREFIX
 
 if test -n "$JANET_BUILD_TYPE"
     set -gx _OLD_JANET_BUILD_TYPE "$JANET_BUILD_TYPE"

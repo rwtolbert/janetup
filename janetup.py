@@ -16,7 +16,7 @@ finish = """
 Created new Janet environment at {venv_path}:
 
 (Bash/Zsh)
-    run `source {venv_path}/bin/load_janet` to enter
+    run `source {venv_path}/bin/load_janet.sh` to enter
     the new environment, then run 'unload_janet' to exit.
 (Fish)
     run `source {venv_path}/bin/load_janet.fish` to enter
@@ -354,7 +354,7 @@ def activate_scripts(dirname, args):
     if sys.platform == "win32":
         inputs = ["load_janet.ps1"]
     else:
-        inputs = ["load_janet", "load_janet.fish"]
+        inputs = ["load_janet.sh", "load_janet.fish"]
     for input in inputs:
         inname = os.path.join(src_dir, os.path.join("scripts", input))
         outname = os.path.join(os.path.join(dirname, "bin"), input)
@@ -442,7 +442,7 @@ def main(args):
         if not install_jeep(jeep_dir, venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 
-        # install load_janet/deactivate scripts
+        # install load_janet/unload_janet scripts
         if not activate_scripts(venv_path, args):
             return error_and_cleanup(venv_path, curdir)
 

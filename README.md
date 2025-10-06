@@ -37,7 +37,7 @@ run `. <dirname>/bin/load_janet.ps1` to enter the new environment, then `unload_
 
 ```shell
 $ python janetup.py /home/user/jenvs/janet-dev
-$ source /home/user/jenvs/janet-dev/bin/load_janet
+$ source /home/user/jenvs/janet-dev/bin/load_janet.sh
 $ jeep list
 Installed bundles:
    jeep (DEVEL)

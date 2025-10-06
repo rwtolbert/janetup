@@ -12,6 +12,12 @@ if [[ -v JANET_PATH && -n $JANET_PATH ]] ; then
     export _OLD_JANET_PATH;
 fi
 
+# store a JANET_PREFIX if it exists before
+if [[ -v JANET_PREFIX && -n $JANET_PREFIX ]] ; then
+    _OLD_JANET_PREFIX="$JANET_PREFIX";
+    export _OLD_JANET_PREFIX;
+fi
+
 # store a JANET_BUILD_TYPE if it exists before
 if [[ -v JANET_BUILD_TYPE && -n $JANET_BUILD_TYPE ]] ; then
     _OLD_JANET_BUILD_TYPE="$JANET_BUILD_TYPE";
@@ -35,6 +41,8 @@ export JANET_CURRENT_ENV;
 # don't use JANET_PATH inside here
 unset JANET_PATH;
 export JANET_PATH;
+unset JANET_PREFIX;
+export JANET_PREFIX;
 
 unload_janet() {{
   PATH="$_OLD_PATH";
@@ -44,6 +52,12 @@ unload_janet() {{
       JANET_PATH="$_OLD_JANET_PATH";
   fi
   export JANET_PATH;
+
+  unset JANET_PREFIX
+  if [[ -v _OLD_JANET_PREFIX && -n $_OLD_JANET_PREFIX ]] ; then
+      JANET_PREFIX="$_OLD_JANET_PREFIX";
+  fi
+  export JANET_PREFIX;
 
   unset JANET_BUILD_TYPE
   if [[ -v _OLD_JANET_BUILD_TYPE && -n $_OLD_JANET_BUILD_TYPE ]] ; then
