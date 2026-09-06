@@ -64,6 +64,11 @@ def parse_args():
                         default="branch=master",
                         help="Spork version to install.")
 
+    parser.add_argument('--jpm',
+                        metavar="VERSION",
+                        default="branch=master",
+                        help="JPM version to install.")
+
     parser.add_argument('--jeep',
                         metavar="VERSION",
                         default="branch=master",
@@ -73,11 +78,77 @@ def parse_args():
                         choices=['debug', 'develop', 'release'],
                         help="Build type to for install. Also sets JANET_BUILD_TYPE in new environment.")
 
+    parser.add_argument('--no-cache', acion='store_true',
+                        help="Don't use cache directory for downloads/builds.")
+
     parser.add_argument('-v', '--verbose',
                         action='store_true',help="Show verbose output")
 
+    parser.add_argument("--list_releases", action='store_true',
+                        help="Show available releases for all items.")
+
     args = parser.parse_args()
     return args
+
+
+owners = {
+    "janet": "janet-lang",
+    "jpm": "janet-lang",
+    "spork": "janet-lang",
+    "jeep": "pyrmont"
+}
+
+def get_releases(name: str, owner:str) -> List[str]:
+    releases = []
+    tags = []
+
+    # get list of releases
+    try:
+        urllib.request.urlretrieve(f"https://api.github.com/repos/{owner}/{name}/releases",
+                                   "releases.json")
+    except urllib.request.HTTPError:
+        print(f"Could not download the latest {name} release info.")
+
+    if os.path.isfile("releases.json"):
+        with open("releases.json") as f:
+            data = json.load(f)
+            releases = [d["tag_name"] for d in data]
+        os.remove("releases.json")
+
+    # get list of tags
+    try:
+        urllib.request.urlretrieve(f"https://api.github.com/repos/{owner}/{name}/tags",
+                                   "tags.json")
+    except urllib.request.HTTPError:
+        print(f"Could not download the latest {name} tag info.")
+
+    if os.path.isfile("tags.json"):
+        with open("tags.json") as f:
+            data = json.load(f)
+            tags = [d["name"] for d in data]
+        os.remove("tags.json")
+
+    return releases, tags
+
+
+def list_releases():
+    for name in owners:
+        print("------------------------------")
+        print(name)
+        releases, tags = get_releases(name, owners[name])
+        print("Releases:")
+        if len(releases) > 0:
+            for rel in releases:
+                print("  {0}".format(rel))
+        else:
+            print("  None")
+
+        print("Tags:")
+        if len(tags) > 0:
+            for tag in tags:
+                print("  {0}".format(tag))
+        else:
+            print("  None")
 
 
 def get_from_github(name:str, owner:str,
@@ -92,31 +163,20 @@ def get_from_github(name:str, owner:str,
     base_url = f"https://github.com/{owner}/{name}/archive"
     url = None
     message = None
-    if branch is None and tag is None and commit is None:  # we are trying to get a release
-        # get list of releases
-        try:
-            urllib.request.urlretrieve(f"https://api.github.com/repos/{owner}/{name}/releases",
-                                       "releases.json")
-        except urllib.request.HTTPError:
-            print(f"Could not download the latest {name} release info.")
-            return None
+    # get list of releases and tags
+    releases, tags = get_releases(name, owner)
 
-        if os.path.isfile("releases.json"):
-            with open("releases.json") as f:
-                data = json.load(f)
-                releases = [d["tag_name"] for d in data]
-                if release is None or release == "latest" and len(releases) > 0:
-                    tag = releases[0]
-                elif release in releases:
-                    tag = release
-                else:
-                    print(f"Could not find the release '{release}' for '{name}'.")
-                    return None
-            os.remove("releases.json")
+    if branch is None and tag is None and commit is None:  # we are trying to get a release
+        if release is None or release == "latest" and len(releases) > 0:
+            tag = releases[0]
+        elif release in releases:
+            tag = release
+        else:
+            print(f"Could not find the release '{release}' for '{name}'.")
+            return None
         file_name = f"{tag}.tar.gz"
         url = f"{base_url}/refs/tags/{file_name}"
         message = f"{name} - release:{tag}"
-
     elif branch is not None:
         file_name = f"{branch}.tar.gz"
         url = f"{base_url}/refs/heads/{file_name}"
@@ -313,6 +373,42 @@ def install_spork(tempdir, dirname, args):
     return True
 
 
+def install_jpm(tempdir, dirname, args):
+    curdir = os.getcwd()
+    os.chdir(tempdir)
+    print(f"Building JPM")
+
+    if args.verbose:
+        stdout_handle = sys.stdout
+    else:
+        stdout_handle = subprocess.PIPE
+
+    env = dict(os.environ)
+    for item in ["PREFIX", "JANET_PATH", "JANET_PREFIX", "JANET_BINPATH",
+                 "JANET_LIBPATH", "JANET_HEADERPATH", "JANET_MANPATH"]:
+        if item in env:
+            env.pop(item)
+
+    # help janet/cc find the headers and libs
+    if sys.platform == "win32":
+        env["JANET_PREFIX"] = dirname
+        env["JANET_PATH"] = os.path.join(dirname, "Library")
+
+    cmd = f"{dirname}/bin/janet bootstrap.janet"
+    res = subprocess.run(cmd.split(), env=env, stdout=stdout_handle, stderr=subprocess.PIPE, universal_newlines=True)
+    if res.returncode != 0:
+        if not args.verbose:
+            print(res.stdout)
+        print(res.stderr)
+        print(f"Failed to install JPM. RC = {res.returncode}")
+        return False
+
+    print(f"  Installed JPM in {dirname}")
+
+    os.chdir(curdir)
+    return True
+
+
 def install_jeep(tempdir, dirname, args):
     curdir = os.getcwd()
     os.chdir(tempdir)
@@ -402,8 +498,19 @@ def error_and_cleanup(venv_path, curdir):
     return 1
 
 
+def get_cache_dir(no_cache: bool = False):
+    if no_cache:
+        return tempfile.TemporaryDirectory()
+    else:
+        pass
+
 def main(args):
     args = parse_args()
+
+    if args.list_releases:
+        list_releases()
+        return 0
+
     venv_path = os.path.abspath(os.path.expanduser(args.dirname))
 
     if os.path.exists(venv_path):
@@ -435,6 +542,13 @@ def main(args):
             return error_and_cleanup(venv_path, curdir)
         if not install_spork(spork_dir, venv_path, args):
             return error_and_cleanup(venv_path, curdir)
+
+        jpm_dir = get_thing("janet-lang", "jpm", tempdir, version=args.jpm)
+        if jpm_dir is None:
+            return error_and_cleanup(venv_path, curdir)
+        if not install_jpm(jpm_dir, venv_path, args):
+            return error_and_cleanup(venv_path, curdir)
+
 
         jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
         if jeep_dir is None:
