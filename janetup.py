@@ -78,7 +78,7 @@ def parse_args():
                         choices=['debug', 'develop', 'release'],
                         help="Build type to for install. Also sets JANET_BUILD_TYPE in new environment.")
 
-    parser.add_argument('--no-cache', acion='store_true',
+    parser.add_argument('--no-cache', action='store_true',
                         help="Don't use cache directory for downloads/builds.")
 
     parser.add_argument('-v', '--verbose',
@@ -99,10 +99,8 @@ owners = {
 }
 
 def get_releases(name: str, owner:str) -> List[str]:
-    releases = []
-    tags = []
-
     # get list of releases
+    releases = []
     try:
         urllib.request.urlretrieve(f"https://api.github.com/repos/{owner}/{name}/releases",
                                    "releases.json")
@@ -115,7 +113,12 @@ def get_releases(name: str, owner:str) -> List[str]:
             releases = [d["tag_name"] for d in data]
         os.remove("releases.json")
 
+    return releases
+
+
+def get_tags(name: str, owner: str) -> List[str]:
     # get list of tags
+    tags = []
     try:
         urllib.request.urlretrieve(f"https://api.github.com/repos/{owner}/{name}/tags",
                                    "tags.json")
@@ -128,14 +131,15 @@ def get_releases(name: str, owner:str) -> List[str]:
             tags = [d["name"] for d in data]
         os.remove("tags.json")
 
-    return releases, tags
+    return tags
 
 
 def list_releases():
     for name in owners:
         print("------------------------------")
         print(name)
-        releases, tags = get_releases(name, owners[name])
+        releases = get_releases(name, owners[name])
+        tags = get_tags(name, owners[name])
         print("Releases:")
         if len(releases) > 0:
             for rel in releases:
@@ -151,6 +155,23 @@ def list_releases():
             print("  None")
 
 
+def get_latest_commit(name: str, owner: str, branch: str) -> str:
+    temp_json_file = f"{owner}-{name}-{branch}.json"
+    url = f"https://api.github.com/repos/{owner}/{name}/commits/{branch}"
+    try:
+        path, msg = urllib.request.urlretrieve(url, temp_json_file)
+    except urllib.request.HTTPError:
+        #print(f"Could not download {name} @ {url}.")
+        return None
+    commit = None
+    if os.path.isfile(temp_json_file):
+        with open(temp_json_file) as f:
+            data = json.load(f)
+            commit = data["sha"]
+        os.remove(temp_json_file)
+    return commit
+
+
 def get_from_github(name:str, owner:str,
                     temp_dir:str,
                     release:str = None,
@@ -164,7 +185,7 @@ def get_from_github(name:str, owner:str,
     url = None
     message = None
     # get list of releases and tags
-    releases, tags = get_releases(name, owner)
+    releases = get_releases(name, owner)
 
     if branch is None and tag is None and commit is None:  # we are trying to get a release
         if release is None or release == "latest" and len(releases) > 0:
@@ -177,32 +198,43 @@ def get_from_github(name:str, owner:str,
         file_name = f"{tag}.tar.gz"
         url = f"{base_url}/refs/tags/{file_name}"
         message = f"{name} - release:{tag}"
+        full_file_name = f"{name}-{file_name}"
+        outdir = os.path.abspath(f"{name}_{tag}_git")
     elif branch is not None:
+        commit = get_latest_commit(name, owner, branch)
         file_name = f"{branch}.tar.gz"
         url = f"{base_url}/refs/heads/{file_name}"
         message = f"{name} - branch:{branch}"
+        full_file_name = f"{name}-{commit}-{file_name}"
+        outdir = os.path.abspath(f"{name}_{branch}_{commit}_git")
     elif tag is not None:
         file_name = f"{tag}.tar.gz"
         url = f"{base_url}/refs/tags/{file_name}"
         message = f"{name} - tag:{tag}"
+        full_file_name = f"{name}-{file_name}"
+        outdir = os.path.abspath(f"{name}_{tag}_git")
     elif commit is not None:
         file_name = f"{commit}.tar.gz"
         url = f"{base_url}/{file_name}"
         message = f"{name} - commit:{commit}"
+        full_file_name = f"{name}-{file_name}"
+        outdir = os.path.abspath(f"{name}_{commit}_git")
 
-    print(f"Downloading {message}")
+    if not os.path.isfile(full_file_name):
+        print(f"Downloading {message}")
+        try:
+            path, msg = urllib.request.urlretrieve(url, full_file_name)
+        except urllib.request.HTTPError:
+            #print(f"Could not download {name} @ {url}.")
+            return None
+    else:
+            print("Using cached: {}".format(full_file_name))
 
-    try:
-        path, msg = urllib.request.urlretrieve(url, file_name)
-    except urllib.request.HTTPError:
-        #print(f"Could not download {name} @ {url}.")
-        return None
-
-    tar = tarfile.open(file_name)
-    outdir = os.path.abspath(f"{name}_git")
+    if os.path.exists(outdir):
+        shutil.rmtree(outdir)
+    tar = tarfile.open(full_file_name)
     tar.extractall(path=outdir, filter='data')
     tar.close()
-    os.remove(file_name)
 
     os.chdir(outdir)
     files = glob.glob(f"{name}*")
@@ -484,7 +516,6 @@ def get_thing(owner, repo, tempdir, version):
         res = get_from_github(repo, owner, tempdir, tag=parts[1])
     elif parts[0] == "commit":
         res = get_from_github(repo, owner, tempdir, commit=parts[1])
-
     if res is None:
         print(f"Unable to get {repo} @ {parts[0]} = {parts[1]}")
     return res
@@ -498,11 +529,20 @@ def error_and_cleanup(venv_path, curdir):
     return 1
 
 
-def get_cache_dir(no_cache: bool = False):
-    if no_cache:
-        return tempfile.TemporaryDirectory()
-    else:
-        pass
+def get_cache_dir():
+    from pathlib import Path
+    home = Path.home()
+    cache_dir = None
+    if sys.platform == "darwin":
+        if "XDG_CACHE_HOME" in os.environ:
+            cache_dir = os.path,join(os.environ["XDG_CACHE_HOME"], "janeup")
+        else:
+            cache_dir = home / ".cache" / "janetup"
+
+    if cache_dir is not None:
+        os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
 
 def main(args):
     args = parse_args()
@@ -517,50 +557,59 @@ def main(args):
         print(f"Directory {venv_path} already exists.")
         return 1
 
+    tempdir = tempfile.TemporaryDirectory()
+    cache_dir = get_cache_dir()
+    if args.no_cache:
+        cache_dir = tempdir.name
+
+    if args.verbose:
+        print(f"Using cache dir: {cache_dir}")
+
     curdir = os.getcwd()
-    with tempfile.TemporaryDirectory() as tempdir:
 
-        janet_dir = get_thing("janet-lang", "janet", tempdir, version=args.janet)
-        if janet_dir is None:
-            return error_and_cleanup(venv_path, curdir)
+    janet_dir = get_thing("janet-lang", "janet", cache_dir, version=args.janet)
+    if janet_dir is None:
+        return error_and_cleanup(venv_path, curdir)
 
-        # get hash for build
-        base_name = os.path.basename(janet_dir)
-        parts = base_name.split("-")
-        if len(parts) == 2 and len(parts[1]) == 40 and re.match(r"[0-9a-f]", parts[1]):
-            git_hash = parts[1][:7]
-        else:
-            git_hash = "local"
+    # get hash for build
+    base_name = os.path.basename(janet_dir)
+    parts = base_name.split("-")
+    if len(parts) == 2 and len(parts[1]) == 40 and re.match(r"[0-9a-f]", parts[1]):
+        git_hash = parts[1][:7]
+    else:
+        git_hash = "local"
 
-        spork_dir = get_thing( "janet-lang", "spork", tempdir, version=args.spork)
-        if spork_dir is None:
-            return error_and_cleanup(venv_path, curdir)
+    spork_dir = get_thing( "janet-lang", "spork", cache_dir, version=args.spork)
+    if spork_dir is None:
+        return error_and_cleanup(venv_path, curdir)
 
-        os.makedirs(venv_path)
+    jpm_dir = get_thing("janet-lang", "jpm", cache_dir, version=args.jpm)
+    if jpm_dir is None:
+        return error_and_cleanup(venv_path, curdir)
 
-        if not build_janet(janet_dir, venv_path, git_hash, args):
-            return error_and_cleanup(venv_path, curdir)
-        if not install_spork(spork_dir, venv_path, args):
-            return error_and_cleanup(venv_path, curdir)
+    jeep_dir = get_thing("pyrmont", "jeep", cache_dir, version=args.jeep)
+    if jeep_dir is None:
+        return error_and_cleanup(venv_path, curdir)
 
-        jpm_dir = get_thing("janet-lang", "jpm", tempdir, version=args.jpm)
-        if jpm_dir is None:
-            return error_and_cleanup(venv_path, curdir)
-        if not install_jpm(jpm_dir, venv_path, args):
-            return error_and_cleanup(venv_path, curdir)
+    os.makedirs(venv_path)
 
+    if not build_janet(janet_dir, venv_path, git_hash, args):
+        return error_and_cleanup(venv_path, curdir)
 
-        jeep_dir = get_thing("pyrmont", "jeep", tempdir, version=args.jeep)
-        if jeep_dir is None:
-            return error_and_cleanup(venv_path, curdir)
-        if not install_jeep(jeep_dir, venv_path, args):
-            return error_and_cleanup(venv_path, curdir)
+    if not install_spork(spork_dir, venv_path, args):
+        return error_and_cleanup(venv_path, curdir)
 
-        # install load_janet/unload_janet scripts
-        if not activate_scripts(venv_path, args):
-            return error_and_cleanup(venv_path, curdir)
+    if not install_jpm(jpm_dir, venv_path, args):
+        return error_and_cleanup(venv_path, curdir)
 
-        os.chdir(curdir)
+    if not install_jeep(jeep_dir, venv_path, args):
+        return error_and_cleanup(venv_path, curdir)
+
+    # install load_janet/unload_janet scripts
+    if not activate_scripts(venv_path, args):
+        return error_and_cleanup(venv_path, curdir)
+
+    os.chdir(curdir)
 
     if sys.platform == "win32":
         print(finish_win32.format(venv_path=venv_path))
