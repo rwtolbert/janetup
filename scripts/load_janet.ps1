@@ -63,6 +63,8 @@ if (-not ([string]::IsNullOrEmpty($env:JANET_BUILD_TYPE))) {{
 $env:JANET_CURRENT_ENV="{venv_name}"
 $env:JANET_PREFIX="{venv_dir}"
 $env:JANET_PATH="{venv_dir}\Library"
+$env:JANET_HEADERPATH="{venv_dir}\C"
+$env:JANET_LIBPATH="{venv_dir}\C"
 $env:JANET_BUILD_TYPE="{build_type}"
 
 # store old PATH
