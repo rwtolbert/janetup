@@ -23,7 +23,7 @@ with one of the provided scripts:
 
 ### (Bash/ZSH) 
 
-run `. <dirname>/bin/load_janet` to enter the new environment, then `unload_janet` to exit.
+run `. <dirname>/bin/load_janet.sh` to enter the new environment, then `unload_janet` to exit.
 
 ### (Fish)
 
@@ -36,8 +36,8 @@ run `. <dirname>/bin/load_janet.ps1` to enter the new environment, then `unload_
 ### To create a new Janet in `janet-dev` on macOS/Linux:
 
 ```shell
-$ python janetup.py /home/user/jenvs/janet-dev
-$ source /home/user/jenvs/janet-dev/bin/load_janet.sh
+$ python3 janetup.py $HOME/jenvs/janet-dev
+$ source $HOME/jenvs/janet-dev/bin/load_janet.sh
 $ jeep list
 Installed bundles:
    jeep (DEVEL)
